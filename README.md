@@ -1,0 +1,11 @@
+# Graphcore Research
+
+This repository collects implementations and illustrative code to accompany our research publications.
+
+For a full list of our publications, please see [graphcore.ai/resources/research-papers](https://www.graphcore.ai/resources/research-papers)
+
+## Projects
+
+- [Improving Neural Network Training in Low Dimensional Random Bases](https://github.com/graphcore-research/random-bases), NeurIPS 2020
+- [Accelerating Simulation-based Inference with Emerging AI Hardware](https://github.com/graphcore/demos/tree/master/tensorflow2/ABC_COVID-19)
+- [Revisiting Small Batch Training for Deep Neural Networks](https://github.com/graphcore/examples/tree/master/applications/tensorflow/cnns/training)
