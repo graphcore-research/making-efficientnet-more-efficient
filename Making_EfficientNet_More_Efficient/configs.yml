@@ -1,0 +1,540 @@
+mk2_efficientnet_base: &mk2_efficientnet_base
+  model: efficientnet
+  dataset: imagenet
+  precision: "16.32"
+  eight_bit_io: True
+  enable_half_partials: True
+  standard_imagenet: True
+  no_stochastic_rounding: True
+
+mk2_efficientnet_train_base: &mk2_efficientnet_train_base
+  disable_variable_offloading: True
+  optimiser: RMSprop
+  lr_schedule: exponential
+  label_smoothing: 0.1
+  epochs: 350
+  enable_recomputation: True
+  internal_exchange_optimisation_target: balanced
+  pipeline_schedule: Grouped
+  weight_avg_exp: [0.97]
+  pipeline: True
+  cutmix_version: 1
+#  saturate_on_overflow: True
+
+B0: &B0
+  <<: *mk2_efficientnet_base
+  model_size: 0
+  mixup_alpha: 0.1
+
+B1: &B1
+  <<: *mk2_efficientnet_base
+  model_size: 1
+  cutmix_lambda: 0.95
+  mixup_alpha: 0.1
+
+B2: &B2
+  <<: *mk2_efficientnet_base
+  model_size: 2
+  cutmix_lambda: 0.9
+  mixup_alpha: 0.1
+
+B3: &B3
+  <<: *mk2_efficientnet_base
+  model_size: 3
+  cutmix_lambda: 0.9
+  mixup_alpha: 0.2
+
+B4: &B4
+  <<: *mk2_efficientnet_base
+  model_size: 4
+  cutmix_lambda: 0.85
+  mixup_alpha: 0.2
+
+B5: &B5
+  <<: *mk2_efficientnet_base
+  model_size: 5
+  cutmix_lambda: 0.8
+  mixup_alpha: 0.2
+
+B0_Half_Res: &B0_Half_Res
+  image_size: 160
+  
+B1_Half_Res: &B1_Half_Res
+  image_size: 176
+
+B2_Half_Res: &B2_Half_Res
+  image_size: 196
+
+B3_Half_Res: &B3_Half_Res
+  image_size: 204
+  
+B4_Half_Res: &B4_Half_Res
+  image_size: 252
+
+B5_Half_Res: &B5_Half_Res
+  image_size: 328
+
+G1: &G1
+  group_dim: 1
+  expand_ratio: 6
+
+G16: &G16
+  group_dim: 16
+  expand_ratio: 4
+
+GN: &GN
+  groups: 4
+  proxy_norm: False
+
+LN_PN: &LN_PN
+  groups: 1
+  proxy_norm: True
+
+FP32_copy_and_offload: &FP32_copy_and_offload
+  precision: "16.16"
+  disable_variable_offloading: False
+  offload_fp32_weight_copy: True
+
+#----------------------------------------
+# G1-GN-Native Configurations
+#----------------------------------------
+
+B0-G1-GN: &B0-G1-GN
+  <<: *B0
+  <<: *G1
+  <<: *GN
+
+B1-G1-GN: &B1-G1-GN
+  <<: *B1
+  <<: *G1
+  <<: *GN
+
+B2-G1-GN: &B2-G1-GN
+  <<: *B2
+  <<: *G1
+  <<: *GN
+
+B3-G1-GN: &B3-G1-GN
+  <<: *B3
+  <<: *G1
+  <<: *GN
+
+B4-G1-GN: &B4-G1-GN
+  <<: *B4
+  <<: *G1
+  <<: *GN
+
+B5-G1-GN: &B5-G1-GN
+  <<: *B5
+  <<: *G1
+  <<: *GN
+
+B0-G1-GN-Native_16IPU_2x8:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B0-G1-GN
+  batch_size: 12
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 8
+  pipeline_splits: [block3b]
+
+B1-G1-GN-Native_16IPU_4x4:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B1-G1-GN
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4a, block5c]
+
+B2-G1-GN-Native_16IPU_4x4:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B2-G1-GN
+  available_memory_proportion: ["0.2"]
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4a, block5d]
+
+B3-G1-GN-Native_16IPU_4x4:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B3-G1-GN
+  internal_exchange_optimisation_target: memory
+  batch_size: 6
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 32
+  pipeline_splits: [block2b, block4a, block5d]
+
+B4-G1-GN-Native_16IPU_4x4:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B4-G1-GN
+  available_memory_proportion: ["0.2"]
+  enable_conv_dithering: True
+  batch_size: 3
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 64
+  pipeline_splits: [block2b, block4b, block6c]
+
+B5-G1-GN-Native_16IPU_4x4:
+  name_suffix: G1-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B5-G1-GN
+  <<: *FP32_copy_and_offload
+  available_memory_proportion:
+    ["0.07","0.07","0.1","0.1","0.1","0.1","0.1","0.1"]
+  enable_conv_dithering: True
+  batch_size: 2
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 96
+  pipeline_splits: [block2c, block4a, block5g]
+
+
+#----------------------------------------
+# G16-GN-Native Configurations
+#----------------------------------------
+
+B0-G16-GN: &B0-G16-GN
+  <<: *B0
+  <<: *G16
+  <<: *GN
+
+B1-G16-GN: &B1-G16-GN
+  <<: *B1
+  <<: *G16
+  <<: *GN
+
+B2-G16-GN: &B2-G16-GN
+  <<: *B2
+  <<: *G16
+  <<: *GN
+
+B3-G16-GN: &B3-G16-GN
+  <<: *B3
+  <<: *G16
+  <<: *GN
+
+B4-G16-GN: &B4-G16-GN
+  <<: *B4
+  <<: *G16
+  <<: *GN
+
+B5-G16-GN: &B5-G16-GN
+  <<: *B5
+  <<: *G16
+  <<: *GN
+
+B0-G16-GN-Native_16IPU_2x8:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B0-G16-GN
+  batch_size: 12
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 8
+  pipeline_splits: [block3b]
+
+B1-G16-GN-Native_16IPU_2x8:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B1-G16-GN
+  batch_size: 8
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 12
+  pipeline_splits: [block4b]
+
+B2-G16-GN-Native_16IPU_4x4:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B2-G16-GN
+  available_memory_proportion: ["0.2"]
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4a, block5d]
+
+B3-G16-GN-Native_16IPU_4x4:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B3-G16-GN
+  internal_exchange_optimisation_target: memory
+  batch_size: 8
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 24
+  pipeline_splits: [block2b, block4b, block5e]
+
+B4-G16-GN-Native_16IPU_4x4:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B4-G16-GN
+  batch_size: 4
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 48
+  pipeline_splits: [block2c, block4c, block6a]
+
+B5-G16-GN-Native_16IPU_4x4:
+  name_suffix: G16-GN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B5-G16-GN
+  batch_size: 2
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 96
+  available_memory_proportion: ["0.2"]
+  enable_conv_dithering: True
+  pipeline_splits: [block2e, block4f, block6e]
+
+
+#----------------------------------------
+# G16-GN-Half Configurations
+#----------------------------------------
+
+B0-G16-GN-Half_16IPU_2x8:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B0-G16-GN
+  <<: *B0_Half_Res
+  batch_size: 24
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 4
+  pipeline_splits: [block4b]
+
+B1-G16-GN-Half_16IPU_4x4:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B1-G16-GN
+  <<: *B1_Half_Res
+  batch_size: 24
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 8
+  pipeline_splits: [block2b, block4a, block5d]
+
+B2-G16-GN-Half_16IPU_4x4:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B2-G16-GN
+  <<: *B2_Half_Res
+  batch_size: 24
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 8
+  pipeline_splits: [block2b, block4a, block5d]
+
+B3-G16-GN-Half_16IPU_4x4:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B3-G16-GN
+  <<: *B3_Half_Res
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4b, block5e]
+
+B4-G16-GN-Half_16IPU_4x4:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B4-G16-GN
+  <<: *B4_Half_Res
+  batch_size: 8
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 24
+  pipeline_splits: [block2c, block4c, block6a]
+
+B5-G16-GN-Half_16IPU_4x4:
+  name_suffix: G16-GN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B5-G16-GN
+  <<: *B5_Half_Res
+  batch_size: 3
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 64
+  pipeline_splits: [block2e, block4e, block6c]
+
+
+#----------------------------------------
+# G16-LN_PN-Native Configurations
+#----------------------------------------
+
+B0-G16-LN_PN: &B0-G16-LN_PN
+  <<: *B0
+  <<: *G16
+  <<: *LN_PN
+
+B1-G16-LN_PN: &B1-G16-LN_PN
+  <<: *B1
+  <<: *G16
+  <<: *LN_PN
+
+B2-G16-LN_PN: &B2-G16-LN_PN
+  <<: *B2
+  <<: *G16
+  <<: *LN_PN
+
+B3-G16-LN_PN: &B3-G16-LN_PN
+  <<: *B3
+  <<: *G16
+  <<: *LN_PN
+
+B4-G16-LN_PN: &B4-G16-LN_PN
+  <<: *B4
+  <<: *G16
+  <<: *LN_PN
+
+B5-G16-LN_PN: &B5-G16-LN_PN
+  <<: *B5
+  <<: *G16
+  <<: *LN_PN
+
+B0-G16-LN_PN-Native_16IPU_2x8:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B0-G16-LN_PN
+  batch_size: 12
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 8
+  pipeline_splits: [block3b]
+
+B1-G16-LN_PN-Native_16IPU_2x8:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B1-G16-LN_PN
+  batch_size: 8
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 12
+  pipeline_splits: [block4b]
+
+B2-G16-LN_PN-Native_16IPU_4x4:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B2-G16-LN_PN
+  available_memory_proportion: ["0.2"]
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4a, block5d]
+
+B3-G16-LN_PN-Native_16IPU_4x4:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B3-G16-LN_PN
+  internal_exchange_optimisation_target: memory
+  batch_size: 8
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 24
+  pipeline_splits: [block2b, block4b, block5e]
+
+B4-G16-LN_PN-Native_16IPU_4x4:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B4-G16-LN_PN
+  batch_size: 4
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 48
+  pipeline_splits: [block2c, block4c, block6a]
+
+B5-G16-LN_PN-Native_16IPU_4x4:
+  name_suffix: G16-LN_PN-Native
+  <<: *mk2_efficientnet_train_base
+  <<: *B5-G16-LN_PN
+  batch_size: 2
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 96
+  available_memory_proportion: ["0.2"]
+  enable_conv_dithering: True
+  pipeline_splits: [block2e, block4f, block6e]
+
+
+#----------------------------------------
+# G16-LN_PN-Half Configurations
+#----------------------------------------
+
+B0-G16-LN_PN-Half_16IPU_2x8:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B0-G16-LN_PN
+  <<: *B0_Half_Res
+  batch_size: 24
+  shards: 2
+  replicas: 8
+  gradient_accumulation_count: 4
+  pipeline_splits: [block4b]
+
+B1-G16-LN_PN-Half_16IPU_4x4:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B1-G16-LN_PN
+  <<: *B1_Half_Res
+  batch_size: 24
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 8
+  pipeline_splits: [block2b, block4a, block5d]
+
+B2-G16-LN_PN-Half_16IPU_4x4:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B2-G16-LN_PN
+  <<: *B2_Half_Res
+  batch_size: 24
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 8
+  pipeline_splits: [block2b, block4a, block5d]
+
+B3-G16-LN_PN-Half_16IPU_4x4:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B3-G16-LN_PN
+  <<: *B3_Half_Res
+  batch_size: 12
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 16
+  pipeline_splits: [block2b, block4b, block5e]
+
+B4-G16-LN_PN-Half_16IPU_4x4:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B4-G16-LN_PN
+  <<: *B4_Half_Res
+  batch_size: 8
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 24
+  pipeline_splits: [block2c, block4c, block6a]
+
+B5-G16-LN_PN-Half_16IPU_4x4:
+  name_suffix: G16-LN_PN-Half
+  <<: *mk2_efficientnet_train_base
+  <<: *B5-G16-LN_PN
+  <<: *B5_Half_Res
+  batch_size: 3
+  shards: 4
+  replicas: 4
+  gradient_accumulation_count: 64
+  available_memory_proportion: [0.2]
+  pipeline_splits: [block2e, block4e, block6c]
+
